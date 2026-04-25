@@ -6,6 +6,7 @@ import { socket } from "../socket"
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false);
   const [transport, setTransport] = useState("N/A");
+  const [data, setData] = useState("No Data");
 
   useEffect(() => {
     if (socket.connected) {
@@ -28,6 +29,10 @@ export default function Home() {
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    socket.on('dataReading', message => {
+      console.log(message)
+      setData(message)
+    })
 
     return () => {
       socket.off("connect", onConnect);
@@ -39,6 +44,7 @@ export default function Home() {
     <div>
       <p>Status: {isConnected ? "connected" : "disconnected"}</p>
       <p>Transport: {transport}</p>
+      <pre>{typeof data === 'object' ? JSON.stringify(data, null, 2) : data}</pre>
     </div>
   );
 }
