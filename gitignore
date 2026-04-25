@@ -15,6 +15,7 @@ pids
 *.pid.lock
 
 # Dependency directories
+backend/node_modules/
 node_modules/
 
 # Build outputs
