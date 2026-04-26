@@ -15,11 +15,16 @@ const ALERT_COOLDOWN_MS = 30000;
 
 const nodeStates = {};
 const alertLifecycle = {};
-const STABLE_READING_NEEDED = 2;
+const STABLE_READING_NEEDED = Number.parseInt(process.env.ALERT_STABLE_READINGS || '2', 10);
 const THRESHOLDS = {
-    tempDelta: 20.0,
-    humidityDelta: 10.0
+    tempDelta: Number.parseFloat(process.env.ALERT_TEMP_DELTA || '5'),
+    humidityDelta: Number.parseFloat(process.env.ALERT_HUMIDITY_DELTA || '10')
 };
+
+function toNumberOrNull(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+}
 
 async function hydrateOpenAlertForNode(nodeId) {
     const latestOpen = await AlertLog.findOne({ nodeId, status: 'Open' })
@@ -122,8 +127,17 @@ client.on('message', async (topic, message) => {
 
         const previousData = nodeStates[data.nodeId];
         if (previousData) {
-            const tempDelta = Math.abs(data.temp - previousData.temp);
-            const humidityDelta = Math.abs(data.humidity - previousData.humidity);
+            const currentTemp = toNumberOrNull(data.temp);
+            const currentHumidity = toNumberOrNull(data.humidity);
+            const prevTemp = toNumberOrNull(previousData.temp);
+            const prevHumidity = toNumberOrNull(previousData.humidity);
+
+            const tempDelta = currentTemp !== null && prevTemp !== null
+                ? Math.abs(currentTemp - prevTemp)
+                : 0;
+            const humidityDelta = currentHumidity !== null && prevHumidity !== null
+                ? Math.abs(currentHumidity - prevHumidity)
+                : 0;
 
             if (!alertLifecycle[data.nodeId]) {
                 alertLifecycle[data.nodeId] = {
@@ -155,11 +169,11 @@ client.on('message', async (topic, message) => {
                     let discordReason = reason;
 
                     if (tempSpike) {
-                        const tempDiff = data.temp - previousData.temp;
+                        const tempDiff = currentTemp - prevTemp;
                         reason = `Sudden Temp Shift (${tempDiff.toFixed(1)}°F)`;
                         discordReason = `Sudden Temperature Shift Detected (Shifted by ${tempDelta.toFixed(1)}°F)`;
                     } else if (humiditySpike) {
-                        const humDiff = data.humidity - previousData.humidity;
+                        const humDiff = currentHumidity - prevHumidity;
                         reason = `Sudden Humidity Spike (${humDiff.toFixed(1)}%)`;
                         discordReason = `Sudden Humidity Shift Detected (Shifted by ${humidityDelta.toFixed(1)}%)`;
                     }

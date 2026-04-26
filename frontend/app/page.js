@@ -33,12 +33,46 @@ export default function Home() {
   const [data, setData] = useState("No Data");
   const [chartMetric, setChartMetric] = useState("temp");
   const [feedMode, setFeedMode] = useState("live");
+  const [showWelcome, setShowWelcome] = useState(true);
 
   const [nodeIds, setNodeIds] = useState([]);
   const [nodeSeries, setNodeSeries] = useState({});
   const [historyError, setHistoryError] = useState(null);
 
   const [alertLogs, setAlertLogs] = useState([]);
+
+  const [incidentSummary, setIncidentSummary] = useState([
+    "Loading incident briefing...",
+  ])
+
+  useEffect(() => {
+    async function loadIncidentSummary() {
+      try {
+        const res = await fetch(`http://${NEXT_PUBLIC_API_URL}:3001/api/alert-logs/summary?limit=10`);
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        const json = await res.json();
+        if (Array.isArray(json.bullets) && json.bullets.length > 0) {
+          setIncidentSummary(json.bullets);
+        } else {
+          setIncidentSummary([
+            "No briefing bullets available yet.",
+            "Monitoring remains active for incoming incidents.",
+          ]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch incident summary", err);
+        setIncidentSummary([
+          "Could not load AI incident briefing.",
+          "Fallback mode active while telemetry and logging continue.",
+        ]);
+      }
+    }
+
+    loadIncidentSummary();
+  }, [])
 
   useEffect(() => {
     async function loadLogs() {
@@ -227,6 +261,46 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-black text-green-500 font-mono p-8 selection:bg-green-900 selection:text-green-100">
+      {showWelcome && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl border-2 border-green-700 bg-[#061006] shadow-[0_0_45px_rgba(34,197,94,0.18)] relative overflow-hidden">
+            <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,255,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none"></div>
+
+            <div className="relative z-10 p-6 sm:p-8">
+              <div className="flex items-start justify-between gap-4 border-b border-green-800/60 pb-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.25em] text-green-700">Command Interface</p>
+                  <h2 className="text-2xl sm:text-3xl font-bold uppercase tracking-widest text-green-300 mt-1">Welcome Back, Operator</h2>
+                </div>
+                <span className="text-[10px] uppercase tracking-[0.2em] px-2 py-1 border border-green-700 text-green-500">Hourly Brief</span>
+              </div>
+
+              <p className="mt-5 text-sm text-green-400/90 uppercase tracking-wider">
+                Incident summary from the previous 60 minutes.
+              </p>
+
+              <div className="mt-4 border border-green-900 bg-black/45 p-4 space-y-3">
+                {incidentSummary.map((line, index) => (
+                  <div key={`sample-incident-${index}`} className="flex items-start gap-3 text-sm text-green-300/90">
+                    <span className="mt-1 inline-block h-2 w-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]"></span>
+                    <span>{line}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:justify-end">
+                <button
+                  onClick={() => setShowWelcome(false)}
+                  className="px-5 py-2 border border-green-500 bg-green-500 text-black font-bold uppercase tracking-widest hover:bg-green-400 transition-colors"
+                >
+                  Enter Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
         <header className="border-b-2 border-green-800 pb-4 mb-8 flex justify-between items-end">
           <div>
