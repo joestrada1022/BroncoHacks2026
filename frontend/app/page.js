@@ -1,25 +1,68 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { socket } from "../socket"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import TacticalMap from "../components/TacticalMap";
 
-const MOCK_DATA = [
-  { time: "00:00", NodeAlpha: 20, NodeBeta: 22, NodeGamma: 19 },
-  { time: "01:00", NodeAlpha: 22, NodeBeta: 24, NodeGamma: 21 },
-  { time: "02:00", NodeAlpha: 21, NodeBeta: 25, NodeGamma: 20 },
-  { time: "03:00", NodeAlpha: 24, NodeBeta: 23, NodeGamma: 22 },
-  { time: "04:00", NodeAlpha: 25, NodeBeta: 26, NodeGamma: 23 },
-  { time: "05:00", NodeAlpha: 23, NodeBeta: 27, NodeGamma: 24 },
-  { time: "06:00", NodeAlpha: 26, NodeBeta: 28, NodeGamma: 25 },
-];
+const HISTORY_SIZE = 50;
+
+function sanitizeMetric(value) {
+  const numeric = Number(value);
+  return isNaN(numeric) ? null : numeric;
+}
+
+function normalizeSeries(series) {
+  const sorted = [...series].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+  if (sorted.length > HISTORY_SIZE) {
+    return sorted.slice(sorted.length - HISTORY_SIZE);
+  }
+  return sorted;
+}
+
+const NODE_COLORS = ["#eab308", "#22d3ee", "#a855f7", "#22c55e", "#ef4444", "#f97316"];
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false);
   const [transport, setTransport] = useState("N/A");
   const [data, setData] = useState("No Data");
   const [chartMetric, setChartMetric] = useState("temp");
+
+  const [nodeIds, setNodeIds] = useState([]);
+  const [nodeSeries, setNodeSeries] = useState({});
+  const [historyError, setHistoryError] = useState(null);
+
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        setHistoryError(null);
+        // Important: use your actual API URL here if different (make sure to include http:// protocol if absolute)
+        const res = await fetch("http://localhost:3001/api/node-data/history");
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        const json = await res.json();
+
+        if (json.nodes && json.data) {
+          setNodeIds(json.nodes);
+
+          let nextSeries = {};
+          for (const node of json.nodes) {
+            nextSeries[node] = normalizeSeries(json.data[node] || []);
+          }
+          setNodeSeries(nextSeries);
+        }
+      } catch (err) {
+        console.error("Failed to fetch graph history", err);
+        setHistoryError(err.message);
+      }
+    }
+
+    loadHistory();
+  }, []);
 
   useEffect(() => {
     if (socket.connected) {
@@ -45,13 +88,97 @@ export default function Home() {
     socket.on('dataReading', message => {
       console.log(message)
       setData(message)
+
+      const { nodeId, temp, humidity, pressure, timestamp } = message;
+      if (nodeId) {
+        setNodeIds(prev => {
+          if (!prev.includes(nodeId)) {
+            return [...prev, nodeId];
+          }
+          return prev;
+        });
+
+        setNodeSeries(prev => {
+          const existing = prev[nodeId] || [];
+          // Use current time if timestamp is missing
+          const safeTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
+          const newReading = { temp, humidity, pressure, timestamp: safeTimestamp };
+          const updated = [...existing, newReading];
+
+          return {
+            ...prev,
+            [nodeId]: normalizeSeries(updated)
+          };
+        });
+      }
     })
 
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      socket.off("dataReading");
     };
   }, []);
+
+  const { chartRows, hasRenderablePoints } = useMemo(() => {
+    if (nodeIds.length === 0) return { chartRows: [], hasRenderablePoints: false };
+
+    let pointerIndices = {};
+    nodeIds.forEach(id => (pointerIndices[id] = 0));
+
+    let combined = [];
+    const maxIters = nodeIds.length * HISTORY_SIZE * 2;
+    let iters = 0;
+
+    let hasRenderablePoints = false;
+
+    while (iters < maxIters) {
+      let oldestTime = null;
+      let targetNode = null;
+
+      nodeIds.forEach(id => {
+        const series = nodeSeries[id] || [];
+        const idx = pointerIndices[id];
+        if (idx < series.length) {
+          const t = new Date(series[idx].timestamp).getTime();
+          if (oldestTime === null || t < oldestTime) {
+            oldestTime = t;
+            targetNode = id;
+          }
+        }
+      });
+
+      if (!targetNode) break;
+
+      const thisTime = oldestTime;
+      const dateObj = new Date(thisTime);
+      let row = { time: `${dateObj.getHours().toString().padStart(2, "0")}:${dateObj.getMinutes().toString().padStart(2, "0")}:${dateObj.getSeconds().toString().padStart(2, "0")}` };
+
+      nodeIds.forEach((id) => {
+        const series = nodeSeries[id] || [];
+        const idx = pointerIndices[id];
+        if (idx < series.length) {
+          const seriesT = new Date(series[idx].timestamp).getTime();
+
+          if (Math.abs(seriesT - thisTime) < 1000) {
+            const val = sanitizeMetric(series[idx][chartMetric]);
+            row[id] = val;
+            pointerIndices[id]++;
+            if (val !== null) hasRenderablePoints = true;
+          } else {
+            row[id] = combined.length > 0 ? combined[combined.length - 1][id] : null;
+          }
+        } else {
+          row[id] = combined.length > 0 ? combined[combined.length - 1][id] : null;
+        }
+      });
+
+      combined.push(row);
+      iters++;
+    }
+
+    return { chartRows: combined, hasRenderablePoints };
+  }, [nodeIds, nodeSeries, chartMetric]);
 
   return (
     <div className="min-h-screen bg-black text-green-500 font-mono p-8 selection:bg-green-900 selection:text-green-100">
@@ -179,7 +306,7 @@ export default function Home() {
 
             <div className="h-64 w-full relative z-10">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={MOCK_DATA}>
+                <LineChart data={chartRows}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1f4220" vertical={false} />
                   <XAxis
                     dataKey="time"
@@ -196,33 +323,36 @@ export default function Home() {
                   />
                   <Legend wrapperStyle={{ fontFamily: 'monospace', fontSize: 12 }} />
 
-                  <Line
-                    type="monotone"
-                    dataKey="NodeAlpha"
-                    stroke={chartMetric === "temp" ? "#eab308" : chartMetric === "humidity" ? "#22d3ee" : "#a855f7"}
-                    strokeWidth={2}
-                    dot={{ fill: 'black', r: 4, strokeWidth: 2 }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="NodeBeta"
-                    stroke="#22c55e"
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={{ fill: 'black', r: 4, strokeWidth: 2 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="NodeGamma"
-                    stroke="#ef4444"
-                    strokeWidth={2}
-                    strokeDasharray="3 4"
-                    dot={{ fill: 'black', r: 4, strokeWidth: 2 }}
-                  />
+                  {nodeIds.length > 0 ? (
+                    nodeIds.map((nodeId, index) => (
+                      <Line
+                        key={nodeId}
+                        type="monotone"
+                        dataKey={nodeId}
+                        name={nodeId}
+                        stroke={NODE_COLORS[index % NODE_COLORS.length]}
+                        strokeWidth={2}
+                        connectNulls
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    ))
+                  ) : null}
                 </LineChart>
               </ResponsiveContainer>
             </div>
+
+            {nodeIds.length === 0 && !historyError && (
+              <p className="mt-4 text-sm text-green-700 uppercase tracking-widest text-center">Awaiting node telemetry stream or checking history...</p>
+            )}
+
+            {!hasRenderablePoints && nodeIds.length > 0 && (
+              <p className="mt-2 text-sm text-yellow-400 uppercase tracking-widest text-center">No valid data points for selected metric in recent history.</p>
+            )}
+
+            {historyError && (
+              <p className="mt-2 text-sm text-red-500 uppercase tracking-widest text-center">Warning: {historyError}</p>
+            )}
           </div>
         </main>
       </div>
