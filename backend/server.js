@@ -55,8 +55,8 @@ client.on('message', async (topic, message) => {
         const data = JSON.parse(message.toString())
         console.log('received message:', topic, data)
 
-        await SensorData.create(data)
-        io.emit('dataReading', data)
+        const savedData = await SensorData.create(data)
+        io.emit('dataReading', savedData)
     } catch (err) {
         console.log('error receiving mqtt message', err)
     }
