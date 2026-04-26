@@ -1,4 +1,5 @@
 const express = require('express')
+const cors = require('cors')
 const mongoose = require('mongoose')
 const SensorData = require('./models/SensorData')
 const nodeDataRoutes = require('./nodeData')
@@ -19,6 +20,9 @@ const app = express()
 const server = http.Server(app)
 const port = process.env.PORT || 3001
 
+app.use(cors({
+    origin: 'http://localhost:3000'
+}))
 app.use(express.json())
 app.use('/api/node-data', nodeDataRoutes)
 

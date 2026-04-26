@@ -2,10 +2,22 @@ const express = require("express");
 const router = express.Router();
 const SensorData = require("./models/SensorData");
 
+// GET /api/node-data/nodes - get a list of all unique node IDs
+router.get("/nodes", async (req, res) => {
+    try {
+        const nodes = await SensorData.distinct("nodeId");
+        res.status(200).json(nodes);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 // GET /api/node-data - get 50 most recent entries
+// /api/node-data?nodeId=Alpha
 router.get("/", async (req, res) => {
     try {
-        const results = await SensorData.find({nodeId})
+        const filter = req.query.nodeId ? { nodeId: req.query.nodeId } : {};
+        const results = await SensorData.find(filter)
             .sort({ timestamp: -1 })
             .limit(50);
 
