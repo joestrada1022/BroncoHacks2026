@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { MapContainer, TileLayer, CircleMarker, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
+const NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL
+
 // Helper component to dynamically pan and zoom the Leaflet camera to fit all nodes
 function MapPanner({ bounds }) {
     const map = useMap();
@@ -36,7 +38,7 @@ export default function MapInner() {
     useEffect(() => {
         const fetchNodes = async () => {
             try {
-                const response = await fetch("http://localhost:3001/api/node-data/nodes");
+                const response = await fetch(`http://${NEXT_PUBLIC_API_URL}:3001/api/node-data/nodes`);
                 if (response.ok) {
                     const nodeIds = await response.json();
 
@@ -62,7 +64,7 @@ export default function MapInner() {
         setNodeData(null); // clear old data
 
         try {
-            const response = await fetch(`http://localhost:3001/api/node-data?nodeId=${encodeURIComponent(nodeId)}`);
+            const response = await fetch(`http://${NEXT_PUBLIC_API_URL}:3001/api/node-data?nodeId=${encodeURIComponent(nodeId)}`);
             if (response.ok) {
                 const data = await response.json();
 

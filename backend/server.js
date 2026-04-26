@@ -21,14 +21,14 @@ const server = http.Server(app)
 const port = process.env.PORT || 3001
 
 app.use(cors({
-    origin: 'http://localhost:3000'
+    origin: `http://${process.env.NEXT_PUBLIC_API_URL}:3000`
 }))
 app.use(express.json())
 app.use('/api/node-data', nodeDataRoutes)
 
 const io = require('socket.io')(server, {
     cors: {
-        origin: 'http://localhost:3000',
+        origin: `http://${process.env.NEXT_PUBLIC_API_URL}:3000`,
         methods: ['GET', 'POST'],
     },
 })
