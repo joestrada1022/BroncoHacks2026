@@ -5,7 +5,7 @@ const SensorData = require("./models/SensorData");
 // GET /api/node-data - get 50 most recent entries
 router.get("/", async (req, res) => {
     try {
-        const results = await SensorData.find({id})
+        const results = await SensorData.find({nodeId})
             .sort({ timestamp: -1 })
             .limit(50);
 
