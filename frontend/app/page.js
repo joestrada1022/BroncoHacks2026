@@ -9,6 +9,10 @@ import AlertPanel from "../components/AlertPanel";
 
 const HISTORY_SIZE = 50;
 
+function isKnownNodeId(nodeId) {
+  return typeof nodeId === "string" && nodeId.trim() !== "" && nodeId.trim().toLowerCase() !== "unknown";
+}
+
 function sanitizeMetric(value) {
   const numeric = Number(value);
   return isNaN(numeric) ? null : numeric;
@@ -107,10 +111,11 @@ export default function Home() {
         const json = await res.json();
 
         if (json.nodes && json.data) {
-          setNodeIds(json.nodes);
+          const knownNodes = json.nodes.filter(isKnownNodeId);
+          setNodeIds(knownNodes);
 
           let nextSeries = {};
-          for (const node of json.nodes) {
+          for (const node of knownNodes) {
             nextSeries[node] = normalizeSeries(json.data[node] || []);
           }
           setNodeSeries(nextSeries);
@@ -150,7 +155,7 @@ export default function Home() {
       setData(message)
 
       const { nodeId, temp, humidity, pressure, timestamp } = message;
-      if (nodeId) {
+      if (isKnownNodeId(nodeId)) {
         setNodeIds(prev => {
           if (!prev.includes(nodeId)) {
             return [...prev, nodeId];

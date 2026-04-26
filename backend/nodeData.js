@@ -2,10 +2,14 @@ const express = require("express");
 const router = express.Router();
 const SensorData = require("./models/SensorData");
 
+function isKnownNodeId(nodeId) {
+    return typeof nodeId === "string" && nodeId.trim() !== "" && nodeId.trim().toLowerCase() !== "unknown";
+}
+
 // GET /api/node-data/nodes - get a list of all unique node IDs
 router.get("/nodes", async (req, res) => {
     try {
-        const nodes = await SensorData.distinct("nodeId");
+        const nodes = (await SensorData.distinct("nodeId")).filter(isKnownNodeId);
         res.status(200).json(nodes);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -40,6 +44,8 @@ router.get("/history", async (req, res) => {
             nodeIds = await SensorData.distinct("nodeId");
             nodeIds = nodeIds.slice(0, 4); // Protect against too many nodes killing the graph
         }
+
+        nodeIds = nodeIds.filter(isKnownNodeId);
 
         if (nodeIds.length === 0) {
             return res.status(200).json({ limit: HISTORY_SIZE, nodes: [], data: {} });
