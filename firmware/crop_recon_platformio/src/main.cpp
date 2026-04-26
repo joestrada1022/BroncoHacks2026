@@ -3,15 +3,23 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <WiFiClientSecure.h>
-#include "config.h"
+// #include "config.h"
 
-const char *ssid = WIFI_SSID;
-const char *password = WIFI_PASS;
-const char *mqtt_broker = MQTT_BROKER;
+const char *ssid = "ULTRONV2-2 5664";
+const char *password = "password21";
+const char *mqtt_broker = "4e3aab3d947e4ce89c4d749601ec552e.s1.eu.hivemq.cloud";
+
+
 
 const int csPin = 7;          // LoRa radio chip select
 const int resetPin = 0;        // LoRa radio reset
 const int irqPin = 1;          // change for your board; must be a hardware interrupt pin
+
+const char *MQTT_USER = "broncohacks26";
+const char *MQTT_PASS = "Broncohacks26";
+
+unsigned long lastMsg = 0;
+const long interval = 5000; // Publish every 5 seconds
 
 void setup_wifi()
 {
@@ -35,7 +43,7 @@ void setup_wifi()
   Serial.println(WiFi.localIP());
 }
 
-WiFiClient espClient;
+WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
 void reconnect()
@@ -59,14 +67,15 @@ void reconnect()
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   while (!Serial);
-  sleep(1);
+  delay(1000);
 
   Serial.println("LoRa Receiver");
 
   // connect to wifi
   setup_wifi();
+  espClient.setInsecure(); // Disable SSL certificate verification
   client.setServer(mqtt_broker, 8883);
   client.setBufferSize(8192);
 
@@ -84,8 +93,24 @@ void loop() {
   if (!client.connected())
   {
     reconnect();
+    Serial.println("MQTT Connected");
   }
   client.loop();
+
+  // Publish a message every 5 seconds (non-blocking)
+    unsigned long now = millis();
+    if (now - lastMsg > interval) {
+        lastMsg = now;
+        
+        // Create a simple payload
+        String payload = "Hello from ESP32! Uptime: " + String(now / 1000) + "s";
+        
+        Serial.print("Publishing message: ");
+        Serial.println(payload);
+        
+        // Publish to the topic "esp32/status"
+        client.publish("farm/data", payload.c_str());
+    }
 
   // try to parse packet
   int packetSize = LoRa.parsePacket();
