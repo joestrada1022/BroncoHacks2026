@@ -2,10 +2,76 @@ const express = require('express')
 const cors = require('cors')
 const mongoose = require('mongoose')
 const SensorData = require('./models/SensorData')
+const AlertLog = require('./models/AlertLog')
 const nodeDataRoutes = require('./nodeData')
+const alertLogsRoutes = require('./alertLogs')
 const mqtt = require('mqtt')
 const http = require('http')
 require('dotenv').config()
+
+
+let lastAlertSent = 0;
+const ALERT_COOLDOWN_MS = 30000;
+
+const nodeStates = {};
+const alertLifecycle = {};
+const STABLE_READING_NEEDED = Number.parseInt(process.env.ALERT_STABLE_READINGS || '2', 10);
+const THRESHOLDS = {
+    tempDelta: Number.parseFloat(process.env.ALERT_TEMP_DELTA || '5'),
+    humidityDelta: Number.parseFloat(process.env.ALERT_HUMIDITY_DELTA || '10')
+};
+
+function toNumberOrNull(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+}
+
+async function hydrateOpenAlertForNode(nodeId) {
+    const latestOpen = await AlertLog.findOne({ nodeId, status: 'Open' })
+        .sort({ timestamp: -1 })
+        .select('_id');
+
+    return latestOpen ? latestOpen._id : null;
+}
+
+async function sendDiscordAlert(data, anomalyReason) {
+    const now = Date.now();
+    if (now - lastAlertSent < ALERT_COOLDOWN_MS) return;
+
+    const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+    if (!webhookUrl) {
+        console.log('Skipping Discord Alert: Add DISCORD_WEBHOOK_URL to .env');
+        return;
+    }
+
+    const payload = {
+        username: "TACTICAL ARRAY - SYSTEM ALERT",
+        avatar_url: "https://i.imgur.com/D7nRwsx.jpeg",
+        embeds: [{
+            title: `SENSORY ANOMALY DETECTED: NODE ${data.nodeId}`,
+            color: 16711680, // red
+            description: `**Alert Reason:** ${anomalyReason}\nA sensor node has breached standard operational delta limits.`,
+            fields: [
+                { name: "Core Temperature", value: `${data.temp}°F`, inline: true },
+                { name: "Current Humidity", value: `${data.humidity}%`, inline: true },
+                { name: "Timestamp", value: new Date().toISOString(), inline: false }
+            ],
+            footer: { text: "Tactical Sensor Network - Automated Defense System" }
+        }]
+    };
+
+    try {
+        await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        console.log(`[TACTICAL ALERT DISPATCHED] Sent to Discord Webhook`);
+        lastAlertSent = now;
+    } catch (err) {
+        console.error('Discord Webhook Error:', err);
+    }
+}
 
 const options = {
     host: process.env.MQTT_URL,
@@ -25,6 +91,7 @@ app.use(cors({
 }))
 app.use(express.json())
 app.use('/api/node-data', nodeDataRoutes)
+app.use('/api/alert-logs', alertLogsRoutes)
 
 const io = require('socket.io')(server, {
     cors: {
@@ -57,6 +124,112 @@ client.on('message', async (topic, message) => {
 
         const savedData = await SensorData.create(data)
         io.emit('dataReading', savedData)
+
+        const previousData = nodeStates[data.nodeId];
+        if (previousData) {
+            const currentTemp = toNumberOrNull(data.temp);
+            const currentHumidity = toNumberOrNull(data.humidity);
+            const prevTemp = toNumberOrNull(previousData.temp);
+            const prevHumidity = toNumberOrNull(previousData.humidity);
+
+            const tempDelta = currentTemp !== null && prevTemp !== null
+                ? Math.abs(currentTemp - prevTemp)
+                : 0;
+            const humidityDelta = currentHumidity !== null && prevHumidity !== null
+                ? Math.abs(currentHumidity - prevHumidity)
+                : 0;
+
+            if (!alertLifecycle[data.nodeId]) {
+                alertLifecycle[data.nodeId] = {
+                    isOpen: false,
+                    stableReadingCount: 0,
+                    openAlertId: null,
+                    hydrated: false,
+                };
+            }
+
+            const nodeAlert = alertLifecycle[data.nodeId];
+
+            // Recover any open alert from MongoDB after server restarts.
+            if (!nodeAlert.hydrated) {
+                nodeAlert.openAlertId = await hydrateOpenAlertForNode(data.nodeId);
+                nodeAlert.isOpen = Boolean(nodeAlert.openAlertId);
+                nodeAlert.hydrated = true;
+            }
+
+            const tempSpike = tempDelta >= THRESHOLDS.tempDelta;
+            const humiditySpike = humidityDelta >= THRESHOLDS.humidityDelta;
+            const hasSpike = tempSpike || humiditySpike;
+
+            if (hasSpike) {
+                nodeAlert.stableReadingCount = 0;
+
+                if (!nodeAlert.isOpen) {
+                    let reason = 'Sudden Sensor Shift';
+                    let discordReason = reason;
+
+                    if (tempSpike) {
+                        const tempDiff = currentTemp - prevTemp;
+                        reason = `Sudden Temp Shift (${tempDiff.toFixed(1)}°F)`;
+                        discordReason = `Sudden Temperature Shift Detected (Shifted by ${tempDelta.toFixed(1)}°F)`;
+                    } else if (humiditySpike) {
+                        const humDiff = currentHumidity - prevHumidity;
+                        reason = `Sudden Humidity Spike (${humDiff.toFixed(1)}%)`;
+                        discordReason = `Sudden Humidity Shift Detected (Shifted by ${humidityDelta.toFixed(1)}%)`;
+                    }
+
+                    sendDiscordAlert(data, discordReason);
+
+                    const alertLog = await AlertLog.create({
+                        nodeId: data.nodeId,
+                        reason,
+                        status: 'Open',
+                    });
+
+                    io.emit('alertLogUpdated', {
+                        type: 'created',
+                        alert: alertLog,
+                    });
+
+                    nodeAlert.isOpen = true;
+                    nodeAlert.openAlertId = alertLog._id;
+                }
+            } else if (nodeAlert.isOpen) {
+                nodeAlert.stableReadingCount += 1;
+
+                if (nodeAlert.stableReadingCount >= STABLE_READING_NEEDED) {
+                    let resolvedAlert = null;
+
+                    if (nodeAlert.openAlertId) {
+                        resolvedAlert = await AlertLog.findByIdAndUpdate(
+                            nodeAlert.openAlertId,
+                            { status: 'Resolved' },
+                            { new: true }
+                        );
+                    } else {
+                        resolvedAlert = await AlertLog.findOneAndUpdate(
+                            { nodeId: data.nodeId, status: 'Open' },
+                            { status: 'Resolved' },
+                            { sort: { timestamp: -1 }, new: true }
+                        );
+                    }
+
+                    if (resolvedAlert) {
+                        io.emit('alertLogUpdated', {
+                            type: 'resolved',
+                            alert: resolvedAlert,
+                        });
+                    }
+
+                    nodeAlert.isOpen = false;
+                    nodeAlert.stableReadingCount = 0;
+                    nodeAlert.openAlertId = null;
+                }
+            }
+        }
+
+        nodeStates[data.nodeId] = { temp: data.temp, humidity: data.humidity };
+
     } catch (err) {
         console.log('error receiving mqtt message', err)
     }
