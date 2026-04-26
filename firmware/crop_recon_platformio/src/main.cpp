@@ -3,13 +3,12 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <WiFiClientSecure.h>
+#include <ArduinoJson.h> // <-- Add this include
 // #include "config.h"
 
 const char *ssid = "ULTRONV2-2 5664";
 const char *password = "password21";
 const char *mqtt_broker = "4e3aab3d947e4ce89c4d749601ec552e.s1.eu.hivemq.cloud";
-
-
 
 const int csPin = 7;          // LoRa radio chip select
 const int resetPin = 0;        // LoRa radio reset
@@ -98,19 +97,36 @@ void loop() {
   client.loop();
 
   // Publish a message every 5 seconds (non-blocking)
-    unsigned long now = millis();
-    if (now - lastMsg > interval) {
-        lastMsg = now;
-        
-        // Create a simple payload
-        String payload = "Hello from ESP32! Uptime: " + String(now / 1000) + "s";
-        
-        Serial.print("Publishing message: ");
-        Serial.println(payload);
-        
-        // Publish to the topic "esp32/status"
-        client.publish("farm/data", payload.c_str());
-    }
+  unsigned long now = millis();
+  if (now - lastMsg > interval) {
+      lastMsg = now;
+      
+      // 1. Create dummy data (later, replace these with real LoRa/sensor readings)
+      String nodeId = "Node_01";
+      float temp = 24.5;
+      float pressure = 1013.25;
+      float humidity = 60.0;
+
+      // 2. Create the JSON document
+      // Note: If using ArduinoJson v6, use StaticJsonDocument<200> doc;
+      // For ArduinoJson v7 (latest), use JsonDocument doc;
+      JsonDocument doc; 
+      
+      doc["nodeId"] = nodeId;
+      doc["temp"] = temp;
+      doc["pressure"] = pressure;
+      doc["humidity"] = humidity;
+
+      // 3. Serialize the JSON into a char array buffer
+      char jsonBuffer[256];
+      serializeJson(doc, jsonBuffer);
+      
+      Serial.print("Publishing message: ");
+      Serial.println(jsonBuffer);
+      
+      // 4. Publish to MQTT
+      client.publish("farm/data", jsonBuffer);
+  }
 
   // try to parse packet
   int packetSize = LoRa.parsePacket();
