@@ -1,59 +1,112 @@
-// #include <SPI.h>
-// #include <LoRa.h>
+#include <SPI.h>
+#include <LoRa.h>
+#include <BME280I2C.h>
+#include <Wire.h>
 
-// int counter = 0;
+int counter = 0;
 
-// const int csPin = 7;          // LoRa radio chip select
-// const int resetPin = 0;        // LoRa radio reset
-// const int irqPin = 1;          // change for your board; must be a hardware interrupt pin
+const int csPin = 7;
+const int resetPin = 0;
+const int irqPin = 1;
 
-// void onTxDone();
-// boolean runEvery(unsigned long interval);
+const char* nodeId = "node2";
 
-// void setup() {
-//   Serial.begin(9600);
-//   while (!Serial);
+BME280I2C bme;
 
-//   Serial.println("LoRa Sender non-blocking Callback");
+void onTxDone();
+boolean runEvery(unsigned long interval);
+void sendBME280Data();
+void printBME280Data(Stream* client);
 
-//   LoRa.setPins(csPin, resetPin, irqPin);
+void setup() {
+  Serial.begin(9600);
+  while (!Serial);
 
-//   if (!LoRa.begin(433E6)) {
-//     Serial.println("Starting LoRa failed!");
-//     while (1);
-//   }
+  Serial.println("LoRa Sender non-blocking Callback");
 
-//   LoRa.onTxDone(onTxDone);
-// }
+  Wire.begin();
 
-// void loop() {
-//   if (runEvery(5000)) { // repeat every 5000 millis
+  while (!bme.begin()) {
+    Serial.println("Could not find BME280 sensor!");
+    delay(1000);
+  }
 
-//     Serial.print("Sending packet non-blocking: ");
-//     Serial.println(counter);
+  switch (bme.chipModel()) {
+    case BME280::ChipModel_BME280:
+      Serial.println("Found BME280 sensor! Success.");
+      break;
+    case BME280::ChipModel_BMP280:
+      Serial.println("Found BMP280 sensor! No Humidity available.");
+      break;
+    default:
+      Serial.println("Found UNKNOWN sensor! Error!");
+      break;
+  }
 
-//     // send in async / non-blocking mode
-//     LoRa.beginPacket();
-//     LoRa.print("hello ");
-//     LoRa.print(counter);
-//     LoRa.endPacket(true); // true = async / non-blocking mode
+  LoRa.setPins(csPin, resetPin, irqPin);
 
-//     counter++;
-//   }
-// }
+  if (!LoRa.begin(433E6)) {
+    Serial.println("Starting LoRa failed!");
+    while (1);
+  }
 
-// void onTxDone() {
-//   Serial.println("TxDone");
-// }
+  LoRa.onTxDone(onTxDone);
+}
 
-// boolean runEvery(unsigned long interval)
-// {
-//   static unsigned long previousMillis = 0;
-//   unsigned long currentMillis = millis();
-//   if (currentMillis - previousMillis >= interval)
-//   {
-//     previousMillis = currentMillis;
-//     return true;
-//   }
-//   return false;
-// }
+void loop() {
+  if (runEvery(5000)) {
+    Serial.print("Sending packet non-blocking: ");
+    Serial.println(counter);
+
+    sendBME280Data();
+    counter++;
+  }
+}
+
+void sendBME280Data() {
+  float temp(NAN), hum(NAN), pres(NAN);
+
+  BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
+  BME280::PresUnit presUnit(BME280::PresUnit_Pa);
+
+  bme.read(pres, temp, hum, tempUnit, presUnit);
+
+  // Optional: round values to integers for format like "node1,67,10,34"
+  int tempInt = (int)round(temp);
+  int humInt = (int)round(hum);
+  int presInt = (int)round(pres);
+
+  // Serial output
+  Serial.print(nodeId);
+  Serial.print(",");
+  Serial.print(tempInt);
+  Serial.print(",");
+  Serial.print(humInt);
+  Serial.print(",");
+  Serial.println(presInt);
+
+  // LoRa output
+  LoRa.beginPacket();
+  LoRa.print(nodeId);
+  LoRa.print(",");
+  LoRa.print(tempInt);
+  LoRa.print(",");
+  LoRa.print(humInt);
+  LoRa.print(",");
+  LoRa.print(presInt);
+  LoRa.endPacket(true);
+}
+
+void onTxDone() {
+  Serial.println("TxDone");
+}
+
+boolean runEvery(unsigned long interval) {
+  static unsigned long previousMillis = 0;
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    return true;
+  }
+  return false;
+}
