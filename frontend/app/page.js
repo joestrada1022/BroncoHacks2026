@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { socket } from "../socket"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import TacticalMap from "../components/TacticalMap";
 
 const MOCK_DATA = [
   { time: "00:00", NodeAlpha: 20, NodeBeta: 22, NodeGamma: 19 },
@@ -131,6 +132,18 @@ export default function Home() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Tactical Geographical Feed */}
+          <div className="col-span-1 md:col-span-2 border border-green-900 bg-green-950/10 p-6 flex flex-col pt-4 mt-2">
+            <div className="flex justify-between items-center border-b border-green-900 pb-2 mb-4">
+              <h2 className="text-xl uppercase tracking-widest text-green-700">
+                Global Positioning Network
+              </h2>
+              <span className="text-xs text-green-500 animate-pulse">[ SATELLITE LINK ACTIVE ]</span>
+            </div>
+
+            <TacticalMap />
           </div>
 
           {/* Historical Data Graph */}
