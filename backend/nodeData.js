@@ -39,12 +39,13 @@ router.get("/:id", async (req, res) => {
 // POST /api/node-data - create a new entry
 router.post("/", async (req, res) => {
     try {
-        const { nodeId, temp, humidity, timestamp } = req.body;
+        const { nodeId, temp, humidity, pressure, timestamp } = req.body;
 
         const created = await SensorData.create({
             nodeId,
             temp,
             humidity,
+            pressure,
             ...(timestamp ? { timestamp } : {}),
         });
 

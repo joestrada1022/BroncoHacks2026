@@ -45,7 +45,7 @@ export default function Home() {
       <div className="max-w-4xl mx-auto">
         <header className="border-b-2 border-green-800 pb-4 mb-8 flex justify-between items-end">
           <div>
-            <h1 className="text-3xl font-bold tracking-widest uppercase">Tactical Sensor Array</h1>
+            <h1 className="text-3xl font-bold tracking-widest uppercase">Crop Recon</h1>
             <p className="text-green-700 text-sm mt-1 uppercase tracking-widest">System Monitor - Node Alpha</p>
           </div>
           <div className="text-right border border-green-800 p-3 bg-green-950/20">
@@ -86,6 +86,10 @@ export default function Home() {
                 <div className="flex justify-between items-center border-b border-green-900 pb-2">
                   <span className="text-green-700 uppercase tracking-widest">Ambient Humidity</span>
                   <span className="text-3xl font-bold text-cyan-400">{data.humidity || "ERR"} <span className="text-sm text-green-700">%</span></span>
+                </div>
+                <div className="flex justify-between items-center border-b border-green-900 pb-2">
+                  <span className="text-green-700 uppercase tracking-widest">Pressure</span>
+                  <span className="text-3xl font-bold text-cyan-400">{data.pressure || "ERR"} <span className="text-sm text-green-700">mb</span></span>
                 </div>
               </div>
             ) : (
