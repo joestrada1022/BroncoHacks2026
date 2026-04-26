@@ -2,11 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { socket } from "../socket"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+
+const MOCK_DATA = [
+  { time: "00:00", NodeAlpha: 20, NodeBeta: 22, NodeGamma: 19 },
+  { time: "01:00", NodeAlpha: 22, NodeBeta: 24, NodeGamma: 21 },
+  { time: "02:00", NodeAlpha: 21, NodeBeta: 25, NodeGamma: 20 },
+  { time: "03:00", NodeAlpha: 24, NodeBeta: 23, NodeGamma: 22 },
+  { time: "04:00", NodeAlpha: 25, NodeBeta: 26, NodeGamma: 23 },
+  { time: "05:00", NodeAlpha: 23, NodeBeta: 27, NodeGamma: 24 },
+  { time: "06:00", NodeAlpha: 26, NodeBeta: 28, NodeGamma: 25 },
+];
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false);
   const [transport, setTransport] = useState("N/A");
   const [data, setData] = useState("No Data");
+  const [chartMetric, setChartMetric] = useState("temp");
 
   useEffect(() => {
     if (socket.connected) {
@@ -118,6 +130,85 @@ export default function Home() {
                   <p>&gt; Ingesting into AtlasDB... AWAITING CONFIRMATION</p>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Historical Data Graph */}
+          <div className="col-span-1 md:col-span-2 border-2 border-green-800 bg-black p-6 relative group overflow-hidden mt-2">
+            <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,255,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none"></div>
+
+            <div className="flex justify-between items-center border-b border-green-800/50 pb-2 mb-6">
+              <h2 className="text-xl uppercase tracking-widest text-green-400">
+                Telemetry Analytics
+              </h2>
+
+              <div className="flex gap-2 relative z-10">
+                <button
+                  onClick={() => setChartMetric("temp")}
+                  className={`px-3 py-1 text-sm uppercase tracking-widest border transition-colors ${chartMetric === "temp" ? "bg-green-500 text-black border-green-500 font-bold" : "border-green-800 text-green-700 hover:text-green-500 hover:border-green-500"}`}
+                >
+                  Temp
+                </button>
+                <button
+                  onClick={() => setChartMetric("humidity")}
+                  className={`px-3 py-1 text-sm uppercase tracking-widest border transition-colors ${chartMetric === "humidity" ? "bg-cyan-500 text-black border-cyan-500 font-bold" : "border-green-800 text-green-700 hover:text-cyan-500 hover:border-cyan-500"}`}
+                >
+                  Humidity
+                </button>
+                <button
+                  onClick={() => setChartMetric("pressure")}
+                  className={`px-3 py-1 text-sm uppercase tracking-widest border transition-colors ${chartMetric === "pressure" ? "bg-purple-500 text-black border-purple-500 font-bold" : "border-green-800 text-green-700 hover:text-purple-500 hover:border-purple-500"}`}
+                >
+                  Pressure
+                </button>
+              </div>
+            </div>
+
+            <div className="h-64 w-full relative z-10">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={MOCK_DATA}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1f4220" vertical={false} />
+                  <XAxis
+                    dataKey="time"
+                    stroke="#15803d"
+                    tick={{ fill: '#15803d', fontSize: 12, fontFamily: 'monospace' }}
+                  />
+                  <YAxis
+                    stroke="#15803d"
+                    tick={{ fill: '#15803d', fontSize: 12, fontFamily: 'monospace' }}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'black', border: '1px solid #16a34a', color: '#22c55e', fontFamily: 'monospace' }}
+                    itemStyle={{ color: '#22c55e' }}
+                  />
+                  <Legend wrapperStyle={{ fontFamily: 'monospace', fontSize: 12 }} />
+
+                  <Line
+                    type="monotone"
+                    dataKey="NodeAlpha"
+                    stroke={chartMetric === "temp" ? "#eab308" : chartMetric === "humidity" ? "#22d3ee" : "#a855f7"}
+                    strokeWidth={2}
+                    dot={{ fill: 'black', r: 4, strokeWidth: 2 }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="NodeBeta"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={{ fill: 'black', r: 4, strokeWidth: 2 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="NodeGamma"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    strokeDasharray="3 4"
+                    dot={{ fill: 'black', r: 4, strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </main>
