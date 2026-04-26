@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { socket } from "../socket"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import TacticalMap from "../components/TacticalMap";
+import AlertPanel from "../components/AlertPanel";
 
 
 const HISTORY_SIZE = 50;
@@ -31,6 +32,7 @@ export default function Home() {
   const [transport, setTransport] = useState("N/A");
   const [data, setData] = useState("No Data");
   const [chartMetric, setChartMetric] = useState("temp");
+  const [feedMode, setFeedMode] = useState("live");
 
   const [nodeIds, setNodeIds] = useState([]);
   const [nodeSeries, setNodeSeries] = useState({});
@@ -205,61 +207,78 @@ export default function Home() {
         </header>
 
         <main className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Data Readout Panel */}
-          <div className="border-2 border-green-800 bg-black p-6 relative group overflow-hidden">
+          {/* Main Feed Panel */}
+          <div className="border-2 border-green-800 bg-black p-6 relative group overflow-hidden flex flex-col h-[400px]">
             {/* Scanline effect */}
             <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,255,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none"></div>
 
-            <h2 className="text-xl border-b border-green-800/50 pb-2 mb-6 uppercase tracking-widest text-green-400 flex justify-between">
-              <span>Live Sensor Feed</span>
-              {typeof data === 'object' && <span className="text-green-700 text-sm animate-pulse">Receiving...</span>}
-            </h2>
+            <div className="border-b border-green-800/50 pb-2 mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
+              <h2 className="text-xl uppercase tracking-widest text-green-400">
+                {feedMode === 'live' ? 'Live Sensor Feed' : 'Raw Data Stream'}
+              </h2>
+
+              <div className="flex gap-2 relative z-10">
+                <button
+                  onClick={() => setFeedMode("live")}
+                  className={`px-3 py-1 text-xs uppercase tracking-widest border transition-colors ${feedMode === "live" ? "bg-green-500 text-black border-green-500 font-bold" : "border-green-800 text-green-700 hover:text-green-500 hover:border-green-500"}`}
+                >
+                  Live
+                </button>
+                <button
+                  onClick={() => setFeedMode("raw")}
+                  className={`px-3 py-1 text-xs uppercase tracking-widest border transition-colors ${feedMode === "raw" ? "bg-green-500 text-black border-green-500 font-bold" : "border-green-800 text-green-700 hover:text-green-500 hover:border-green-500"}`}
+                >
+                  Raw
+                </button>
+              </div>
+            </div>
 
             {typeof data === 'object' ? (
-              <div className="space-y-6 relative z-10">
-                <div className="flex justify-between items-center border-b border-green-900 pb-2">
-                  <span className="text-green-700 uppercase tracking-widest">Active Node ID</span>
-                  <span className="text-2xl font-bold">{data.nodeId || "UNKNOWN"}</span>
-                </div>
-                <div className="flex justify-between items-center border-b border-green-900 pb-2">
-                  <span className="text-green-700 uppercase tracking-widest">Core Temp</span>
-                  <span className="text-3xl font-bold text-yellow-400">{data.temp || "ERR"} <span className="text-sm text-green-700">°C/F</span></span>
-                </div>
-                <div className="flex justify-between items-center border-b border-green-900 pb-2">
-                  <span className="text-green-700 uppercase tracking-widest">Ambient Humidity</span>
-                  <span className="text-3xl font-bold text-cyan-400">{data.humidity || "ERR"} <span className="text-sm text-green-700">%</span></span>
-                </div>
-                <div className="flex justify-between items-center border-b border-green-900 pb-2">
-                  <span className="text-green-700 uppercase tracking-widest">Pressure</span>
-                  <span className="text-3xl font-bold text-cyan-400">{data.pressure || "ERR"} <span className="text-sm text-green-700">mb</span></span>
-                </div>
+              <div className="flex-1 relative z-10 overflow-hidden flex flex-col">
+                {feedMode === 'live' ? (
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center border-b border-green-900 pb-2">
+                      <span className="text-green-700 uppercase tracking-widest">Active Node ID</span>
+                      <span className="text-2xl font-bold">{data.nodeId || "UNKNOWN"}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-green-900 pb-2">
+                      <span className="text-green-700 uppercase tracking-widest">Core Temp</span>
+                      <span className="text-3xl font-bold text-yellow-400">{data.temp || "ERR"} <span className="text-sm text-green-700">°C/F</span></span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-green-900 pb-2">
+                      <span className="text-green-700 uppercase tracking-widest">Ambient Humidity</span>
+                      <span className="text-3xl font-bold text-cyan-400">{data.humidity || "ERR"} <span className="text-sm text-green-700">%</span></span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-green-900 pb-2">
+                      <span className="text-green-700 uppercase tracking-widest">Pressure</span>
+                      <span className="text-3xl font-bold text-cyan-400">{data.pressure || "ERR"} <span className="text-sm text-green-700">mb</span></span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-auto bg-black/50 border border-green-900/50 p-4 text-xs text-green-600 block">
+                    <pre>{JSON.stringify(data, null, 2)}</pre>
+                    <div className="mt-4 opacity-50 space-y-1">
+                      {/* <p>&gt; Validating checksum... OK</p> */}
+                      {/* <p>&gt; Decrypting payload... OK</p> */}
+                      <p>&gt; Ingesting into AtlasDB... OK</p>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="flex items-center justify-center h-48 border border-dashed border-green-900 text-green-800 uppercase tracking-widest">
+              <div className="flex items-center justify-center h-48 border border-dashed border-green-900 text-green-800 uppercase tracking-widest relative z-10">
                 Awaiting Telemetry...
               </div>
             )}
           </div>
 
-          {/* Raw Log Panel */}
-          <div className="border border-green-900 bg-green-950/10 p-6 flex flex-col h-full">
-            <h2 className="text-sm border-b border-green-900 pb-2 mb-4 uppercase tracking-widest text-green-700">
-              Raw Data Stream
-            </h2>
-            <div className="flex-1 overflow-auto bg-black border border-green-900 p-4 text-xs text-green-600">
-              {typeof data === 'object' ? (
-                <pre>{JSON.stringify(data, null, 2)}</pre>
-              ) : (
-                <span className="opacity-50"># ENCRYPTED TRANSMISSION PENDING...</span>
-              )}
-              {/* Fake historical logs for military feel */}
-              {typeof data === 'object' && (
-                <div className="mt-4 opacity-50 space-y-1">
-                  <p>&gt; Validating checksum... OK</p>
-                  <p>&gt; Decrypting payload... OK</p>
-                  <p>&gt; Ingesting into AtlasDB... AWAITING CONFIRMATION</p>
-                </div>
-              )}
+          {/* Incident Log / Alert Panel */}
+          <div className="flex flex-col border-2 border-green-800 p-1 relative group overflow-hidden bg-black h-[400px]">
+            {/* Scanline effect */}
+            <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,255,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none z-0"></div>
+
+            <div className="relative z-10 h-full flex flex-col">
+              <AlertPanel />
             </div>
           </div>
 
