@@ -5,6 +5,7 @@ import { socket } from "../socket"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import TacticalMap from "../components/TacticalMap";
 
+
 const HISTORY_SIZE = 50;
 
 function sanitizeMetric(value) {
@@ -23,6 +24,7 @@ function normalizeSeries(series) {
 }
 
 const NODE_COLORS = ["#eab308", "#22d3ee", "#a855f7", "#22c55e", "#ef4444", "#f97316"];
+const NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false);
@@ -39,7 +41,7 @@ export default function Home() {
       try {
         setHistoryError(null);
         // Important: use your actual API URL here if different (make sure to include http:// protocol if absolute)
-        const res = await fetch("http://localhost:3001/api/node-data/history");
+        const res = await fetch(`http://${NEXT_PUBLIC_API_URL}:3001/api/node-data/history`);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
