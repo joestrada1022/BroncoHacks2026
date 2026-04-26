@@ -38,11 +38,33 @@ export default function Home() {
   const [nodeSeries, setNodeSeries] = useState({});
   const [historyError, setHistoryError] = useState(null);
 
+  const [alertLogs, setAlertLogs] = useState([]);
+
+  useEffect(() => {
+    async function loadLogs() {
+      try {
+        setAlertLogs([])
+        const res = await fetch(`http://${NEXT_PUBLIC_API_URL}:3001/api/alert-logs?limit=10`)
+        if (!res.ok) {
+          throw new Error("http error for log. status: ", res.status)
+        }
+
+        const json = await res.json()
+
+        if (json.count > 0 && json.results) {
+          setAlertLogs(json.results)
+        }
+      } catch (err) {
+        console.error("Failed to fetch log history", err);
+      }
+    }
+    loadLogs()
+  }, [])
+
   useEffect(() => {
     async function loadHistory() {
       try {
         setHistoryError(null);
-        // Important: use your actual API URL here if different (make sure to include http:// protocol if absolute)
         const res = await fetch(`http://${NEXT_PUBLIC_API_URL}:3001/api/node-data/history`);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
@@ -117,10 +139,29 @@ export default function Home() {
       }
     })
 
+    socket.on('alertLogUpdated', (payload) => {
+      if (!payload || !payload.alert) return;
+
+      const incoming = payload.alert;
+
+      setAlertLogs((prev) => {
+        const withoutExisting = prev.filter(
+          (item) => String(item._id || item.id) !== String(incoming._id || incoming.id)
+        );
+
+        const next = [incoming, ...withoutExisting]
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .slice(0, 10);
+
+        return next;
+      });
+    });
+
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("dataReading");
+      socket.off("alertLogUpdated");
     };
   }, []);
 
@@ -278,7 +319,7 @@ export default function Home() {
             <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,255,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none z-0"></div>
 
             <div className="relative z-10 h-full flex flex-col">
-              <AlertPanel />
+              <AlertPanel alerts={alertLogs} />
             </div>
           </div>
 
